@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home Page</title>
+    <script src="https://unpkg.com/htmx.org@1.4.1"></script>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="navbar">
+            <ul>
+                <li><a href="#" hx-get="/home" hx-target="#content">Home</a></li>
+                <li><a href="#" hx-get="/about" hx-target="#content">About</a></li>
+                <li><a href="#" hx-get="/contact" hx-target="#content">Contact</a></li>
+                <li><a href="#" hx-get="/faq" hx-target="#content">FAQ</a></li>
+            </ul>
+        </nav>
+	<main id="content" hx-get="/home" hx-trigger="load">
+            <!-- Initial content will be loaded here -->
+        </main>
+    </div>
+</body>
+</html>
