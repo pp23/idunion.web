@@ -20,17 +20,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Sanitize branch name for Docker tag
+        id: sanitize
+        run: |
+          # Sanitize branch name to make it Docker-compatible
+          BRANCH_NAME=${GITHUB_REF##*/}
+          SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-' | tr -cd '[:alnum:]-_.')
+          echo "BRANCH_NAME=$SAFE_BRANCH_NAME" >> $GITHUB_ENV
+
       - name: Build Docker image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:${{ github.ref_name }} .
+          docker build -t ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:${{ env.BRANCH_NAME }} .
 
       - name: Push Docker image (main branch only)
         if: github.ref == 'refs/heads/main'
         run: |
-          docker push ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:${{ github.ref_name }}
+          docker push ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:${{ env.BRANCH_NAME }}
 
       - name: Tag and push 'latest' image (main branch only)
         if: github.ref == 'refs/heads/main'
         run: |
-          docker tag ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:${{ github.ref_name }} ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:latest
+          docker tag ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:${{ env.BRANCH_NAME }} ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:latest
           docker push ghcr.io/${{ github.repository_owner }}/${{ github.repository }}:latest
