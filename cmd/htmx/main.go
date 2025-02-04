@@ -14,6 +14,7 @@ var templates = template.Must(template.ParseFiles(
 	"templates/about.html", // Similarly for other pages
 	"templates/contact.html",
 	"templates/faq.html",
+	"templates/user/login.html", // template.ParseFiles takes only the basename
 ))
 
 // IndexHandler serves the home page
@@ -54,6 +55,8 @@ func main() {
 	http.HandleFunc("/about", PageHandler)
 	http.HandleFunc("/contact", PageHandler)
 	http.HandleFunc("/faq", PageHandler)
+	// Serve user related fragments
+	http.HandleFunc("/login", PageHandler)
 
 	log.Println("Starting server on :8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {

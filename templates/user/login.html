@@ -1,0 +1,41 @@
+<form id="userForm" hx-post="/submit" hx-target="#formResult" hx-swap="innerHTML">
+  <div>
+    <label>Username:</label><br />
+    <input type="text" name="username" placeholder="Enter username" required />
+    <div class="error" id="username-error" style="color: red; font-size: 0.9em;"></div>
+  </div>
+
+  <div>
+    <label>Email:</label><br />
+    <input type="email" name="email" placeholder="Enter email" required />
+    <div class="error" id="email-error" style="color: red; font-size: 0.9em;"></div>
+  </div>
+
+  <button type="submit">Submit</button>
+</form>
+
+<script>
+  document.getElementById('userForm').addEventListener('htmx:configRequest', function(event) {
+    const username = event.target.querySelector('[name="username"]').value.trim();
+    const email = event.target.querySelector('[name="email"]').value.trim();
+
+    document.getElementById('username-error').textContent = '';
+    document.getElementById('email-error').textContent = '';
+
+    let isValid = true;
+
+    if (username.length < 3) {
+      document.getElementById('username-error').textContent = 'Username must be at least 3 characters.';
+      isValid = false;
+    }
+
+    if (!email.includes('@')) {
+      document.getElementById('email-error').textContent = 'Invalid email format.';
+      isValid = false;
+    }
+
+    if (!isValid) {
+      event.preventDefault();
+    }
+  });
+</script>
