@@ -1,0 +1,61 @@
+openapi: 3.0.0
+info:
+  title: dtn-idunion-api
+  version: v0
+  description: >-
+    This API defines endpoints to register new users with idunion
+  x-providerName: dtnidunion
+servers:
+  - url: https://idunion.me/api/v0
+tags:
+  - name: user
+    description: >-
+      User data related endpoints
+paths:
+  /user:
+    post:
+      tags:
+        - user
+      security:
+        - BasicAuth: [] # send register credentials as basic auth
+      operationId: register
+      description: Register a new user with idunion
+      responses:
+        '200':
+          description: Success
+  /token:
+    get:
+      tags:
+       - user
+      security:
+        - CookieAuth: []
+      description: Authorize an authenticated user.
+      responses:
+        '200':
+          description: Success. Returns an OAuth token with authorization claims
+        '401':
+          description: Not authorized. Authentication Cookie not valid.
+  /login:
+    post:
+      tags:
+        - user
+      security:
+        - BasicAuth: []
+      operationId: login
+      description: Authenticate and login an existing user
+      responses:
+        '200':
+          description: >-
+            Success. Authentication Token sent via "Set-Cookie" header.
+            Needs to be used to authorize and get an OAuth token.
+        '400':
+          description: Bad request. Credentials were incorrect.
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: AUTH

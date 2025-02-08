@@ -6,6 +6,7 @@ RUN apk --no-cache add build-base
 
 COPY go.mod go.sum ./
 RUN go mod tidy
+RUN go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1
 
 COPY . .
 

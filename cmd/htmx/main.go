@@ -1,3 +1,5 @@
+//go:generate oapi-codegen -package api -generate "chi-server,models" -o ../../internal/api/api.gen.go ../../api/openapi.yaml
+
 package main
 
 import (
@@ -5,7 +7,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	api "htmx/internal/api"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
+
+type IduImpl struct{}
 
 // Define a global variable for the templates
 var templates = template.Must(template.ParseFiles(
@@ -40,6 +49,10 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+var chiServerOptions = api.ChiServerOptions{
+	BaseURL: "/api/v0",
+}
+
 func main() {
 	log.SetOutput(os.Stdout)                             // Log to standard output
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile) // Include date, time, and file info
@@ -59,6 +72,12 @@ func main() {
 	http.HandleFunc("/login", PageHandler)
 
 	log.Println("Starting server on :8080")
+	var iduImpl api.Unimplemented
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	r.Mount("/api/v0", api.HandlerWithOptions(&iduImpl, chiServerOptions))
+	http.Handle("/api/v0", r)
+
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}

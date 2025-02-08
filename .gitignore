@@ -1,2 +1,5 @@
 # dist artifacts
 out/
+
+# generated apis
+*.gen.go
