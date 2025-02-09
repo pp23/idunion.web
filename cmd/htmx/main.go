@@ -3,9 +3,12 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
+	"htmx/internal/auth/oauth2"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -13,9 +16,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gorilla/sessions"
 )
 
-type IduImpl struct{}
+type IduImpl struct {
+	store *sessions.CookieStore
+}
 
 var chiServerOptions = api.ChiServerOptions{
 	// the frontend forwards api/ requests to the api-handling service
@@ -37,6 +43,7 @@ var templateFiles = []string{
 }
 
 var staticTemplateParams = map[string]string{
+	"MAIL_DOMAIN":               "idunion.me",
 	"USERNAME_VALIDATION_REGEX": "/^[a-z0-9._-]+$/",
 }
 
@@ -94,6 +101,90 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (api *IduImpl) Register(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (api *IduImpl) GetToken(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (api *IduImpl) Login(w http.ResponseWriter, r *http.Request) {
+	// check for cookie
+	for _, cookie := range r.Cookies() {
+		log.Printf("COOKIE: %s  VALUE: %s", cookie.Name, cookie.Value)
+	}
+	{
+		token, err := api.store.Get(r, "t")
+		if err != nil {
+			log.Printf("ERROR: Could not get token: %v", err)
+		}
+		log.Printf("TOKEN: %v", token.Values)
+	}
+	// get auth code
+	URL, urlErr := url.ParseRequestURI("http://whoami.localhost:8085/auth")
+	if urlErr != nil {
+		log.Print(urlErr)
+		return
+	}
+	client := oauth2.Client{
+		Client_id:    "idunion.web",
+		Redirect_uri: "http://localhost:8080/", // TODO: redirect_uri should point to the destination URL of the app that wants to get accessed
+	}
+	res, err := oauth2.RequestAuthCode(
+		&oauth2.AuthCodeRequest{
+			AuthUrl: URL,
+			Client:  &client,
+			Scope:   "TODO: scope",
+		},
+		url.UserPassword("example", os.Getenv("EXAMPLE_USER_PASSWORD")),
+		"TODO: state",
+		"TODO: code_challenge",
+	)
+	if err != nil {
+		log.Printf("ERROR: Getting authCode: %v", err)
+		w.WriteHeader(res.StatusCode)
+		w.Write([]byte(fmt.Sprint(err)))
+		return
+	} else {
+		log.Printf("StatusCode: %v", res.StatusCode)
+	}
+	// get token
+	tokenUrl, tokenUrlErr := url.ParseRequestURI("http://whoami.localhost:8085/token")
+	if tokenUrlErr != nil {
+		log.Print(tokenUrlErr)
+		return
+	}
+	jToken, tokenErr := oauth2.RequestToken(&oauth2.TokenRequest{
+		TokenUrl:         tokenUrl,
+		AuthCodeResponse: res,
+		Client:           &client,
+	})
+	if tokenErr != nil {
+		log.Printf("ERROR: Could not obtain token: %v", tokenErr)
+		return
+	}
+	// Wrap token into cookie and send it back
+	session, errSession := api.store.Get(r, "t")
+	if errSession != nil {
+		log.Printf("WARNING: Get session error: %v", errSession)
+	}
+	session.Options.Secure = true
+	session.Options.HttpOnly = true // prevent Javascript access
+	session.Options.SameSite = http.SameSiteStrictMode
+	session.Options.MaxAge = 0 // 0: last until session end
+	// cookie values
+	session.Values["at"] = jToken.AccessToken
+	session.Values["rt"] = jToken.RefreshToken
+	session.Values["exp"] = jToken.ExpiresIn
+	if err := session.Save(r, w); err != nil {
+		log.Printf("ERROR: Could not save session: %v", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	return
+}
+
 func main() {
 	log.SetOutput(os.Stdout)                             // Log to standard output
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile) // Include date, time, and file info
@@ -134,11 +225,13 @@ func main() {
 	http.HandleFunc("/login", PageHandler)
 
 	log.Println("Starting server on :8080")
-	var iduImpl api.Unimplemented
+	iduImpl := &IduImpl{
+		store: sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY"))),
+	}
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Mount("/api/v0", api.HandlerWithOptions(&iduImpl, chiServerOptions))
-	http.Handle("/api/v0", r)
+	r.Mount("/", api.HandlerWithOptions(iduImpl, chiServerOptions))
+	http.Handle("/api/", r) // trailing "/" is a wildcard pattern for subsequent segments
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
