@@ -94,6 +94,19 @@ func PageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (api *IduImpl) Register(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (api *IduImpl) GetToken(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+func (api *IduImpl) Login(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+	w.Write([]byte("Not imlemented yet"))
+}
+
 func main() {
 	log.SetOutput(os.Stdout)                             // Log to standard output
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile) // Include date, time, and file info
@@ -134,11 +147,11 @@ func main() {
 	http.HandleFunc("/login", PageHandler)
 
 	log.Println("Starting server on :8080")
-	var iduImpl api.Unimplemented
+	var iduImpl IduImpl
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Mount("/api/v0", api.HandlerWithOptions(&iduImpl, chiServerOptions))
-	http.Handle("/api/v0", r)
+	r.Mount("/", api.HandlerWithOptions(&iduImpl, chiServerOptions))
+	http.Handle("/api/", r) // trailing "/" is a wildcard pattern for subsequent segments
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatalf("Server failed: %v", err)

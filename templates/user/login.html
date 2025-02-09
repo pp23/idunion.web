@@ -1,41 +1,56 @@
-<form id="userForm" hx-post="/submit" hx-target="#formResult" hx-swap="innerHTML">
-  <div>
-    <label>Username:</label><br />
-    <input type="text" name="username" placeholder="Enter username" required />
-    <div class="error" id="username-error" style="color: red; font-size: 0.9em;"></div>
+<form
+  id="userForm"
+  hx-post="/api/login"
+  hx-target="#loginResult"
+  hx-swap="innerHTML"
+  hx-on::after-request="if(!event.detail.successful) { document.getElementById('loginResult').innerHTML='ERROR: '+event.detail.xhr.responseText;}"
+>
+  <div style="display: flex; align-items: center">
+    <input type="text" name="username" placeholder="username" required />
+    <label style="margin-left: 8px; font-weight: bold">@maildomain.com</label>
+    <div
+      class="error"
+      id="username-error"
+      style="color: red; font-size: 0.9em"
+    ></div>
   </div>
 
   <div>
-    <label>Email:</label><br />
-    <input type="email" name="email" placeholder="Enter email" required />
-    <div class="error" id="email-error" style="color: red; font-size: 0.9em;"></div>
+    <input type="password" name="email" placeholder="password" required />
   </div>
 
   <button type="submit">Submit</button>
 </form>
 
+<div id="loginResult"></div>
+
 <script>
-  document.getElementById('userForm').addEventListener('htmx:configRequest', function(event) {
-    const username = event.target.querySelector('[name="username"]').value.trim();
-    const email = event.target.querySelector('[name="email"]').value.trim();
+  document
+    .getElementById("userForm")
+    .addEventListener("htmx:configRequest", function (event) {
+      const username = event.target
+        .querySelector('[name="username"]')
+        .value.trim();
 
-    document.getElementById('username-error').textContent = '';
-    document.getElementById('email-error').textContent = '';
+      document.getElementById("username-error").textContent = "";
 
-    let isValid = true;
+      let isValid = true;
 
-    if (username.length < 3) {
-      document.getElementById('username-error').textContent = 'Username must be at least 3 characters.';
-      isValid = false;
-    }
+      if (username.length < 3 || username.length > 30) {
+        document.getElementById("username-error").textContent =
+          "Username must be between 3 and 30 characters.";
+        isValid = false;
+      }
 
-    if (!email.includes('@')) {
-      document.getElementById('email-error').textContent = 'Invalid email format.';
-      isValid = false;
-    }
+      let usernameRegex = {{.USERNAME_VALIDATION_REGEX}};
+      if (!usernameRegex.test(username)) {
+        document.getElementById("username-error").textContent =
+          "Username must contain only lowercase letters and can contain numbers, dashes (-), underscores (_) and periods (.)";
+        isValid = false;
+      }
 
-    if (!isValid) {
-      event.preventDefault();
-    }
-  });
+      if (!isValid) {
+        event.preventDefault();
+      }
+    });
 </script>
