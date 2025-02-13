@@ -37,6 +37,7 @@ var templateFiles = []string{
 }
 
 var staticTemplateParams = map[string]string{
+	"MAIL_DOMAIN":               "idunion.me",
 	"USERNAME_VALIDATION_REGEX": "/^[a-z0-9._-]+$/",
 }
 
