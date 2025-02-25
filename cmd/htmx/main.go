@@ -3,9 +3,13 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
+	"htmx/internal/auth"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -104,8 +108,46 @@ func (api *IduImpl) GetToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *IduImpl) Login(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-	w.Write([]byte("Not imlemented yet"))
+	// get auth code
+	URL, urlErr := url.ParseRequestURI("http://whoami.localhost:8085/auth")
+	if urlErr != nil {
+		log.Print(urlErr)
+		return
+	}
+	res, err, statusCode := auth.RequestAuthCode(
+		URL,
+		url.UserPassword("example", "secret"),
+		auth.Client{
+			Client_id:    "idunion.web",
+			Redirect_uri: "/token",
+		},
+		"TODO",
+	)
+	if err != nil {
+		log.Printf("ERROR: Login response body: %v", err)
+		w.WriteHeader(statusCode)
+	} else {
+		log.Printf("StatusCode: %v", res.StatusCode)
+		for k, v := range res.Header {
+			log.Printf("%s: %s", k, v)
+		}
+		loc, locErr := res.Location()
+		if locErr != nil {
+			log.Printf("Error with response location: %v", locErr)
+			return
+		}
+		log.Printf("Location: %s", loc)
+		data, bodyErr := ioutil.ReadAll(res.Body)
+		if bodyErr != nil {
+			log.Printf("Could not read response payload: %v", bodyErr)
+		}
+		log.Printf("data: %v", string(data))
+		// get token
+
+		w.WriteHeader(res.StatusCode)
+		w.Write([]byte(fmt.Sprint(err)))
+		return
+	}
 }
 
 func main() {
