@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"htmx/internal/auth"
@@ -17,9 +18,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gorilla/sessions"
 )
 
-type IduImpl struct{}
+type IduImpl struct {
+	store *sessions.CookieStore
+}
 
 var chiServerOptions = api.ChiServerOptions{
 	// the frontend forwards api/ requests to the api-handling service
@@ -108,92 +112,129 @@ func (api *IduImpl) GetToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *IduImpl) Login(w http.ResponseWriter, r *http.Request) {
+	// check for cookie
+	for _, cookie := range r.Cookies() {
+		log.Printf("COOKIE: %s  VALUE: %s", cookie.Name, cookie.Value)
+	}
+	{
+		token, err := api.store.Get(r, "t")
+		if err != nil {
+			log.Printf("ERROR: Could not get token: %v", err)
+		}
+		log.Printf("TOKEN: %v", token.Values)
+	}
 	// get auth code
 	var authCode string
+	URL, urlErr := url.ParseRequestURI("http://whoami.localhost:8085/auth")
+	if urlErr != nil {
+		log.Print(urlErr)
+		return
+	}
+	res, err, statusCode := auth.RequestAuthCode(
+		URL,
+		url.UserPassword("example", "secret"),
+		auth.Client{
+			Client_id:    "idunion.web",
+			Redirect_uri: "http://localhost:8080/", // TODO: redirect_uri should point to the destination URL of the app that wants to get accessed
+		},
+		"TODO",
+	)
+	if err != nil {
+		log.Printf("ERROR: Login response body: %v", err)
+		w.WriteHeader(statusCode)
+		w.Write([]byte(fmt.Sprint(err)))
+		return
+	} else {
+		log.Printf("StatusCode: %v", res.StatusCode)
+		for k, v := range res.Header {
+			log.Printf("%s: %s", k, v)
+		}
+		loc, locErr := res.Location()
+		if locErr != nil {
+			log.Printf("Error with response location: %v", locErr)
+			return
+		}
+		log.Printf("Location: %s", loc)
+		if authCodes, ok := loc.Query()["code"]; ok {
+			if len(authCodes) == 1 { // only one code query parameter accepted
+				authCode = authCodes[0]
+			} else {
+				log.Printf("ERROR: Not exactly 1 code parameter found")
+				return
+			}
+		} else {
+			log.Printf("Location %s contains no code query parameter", loc)
+			return
+		}
+		data, bodyErr := ioutil.ReadAll(res.Body)
+		if bodyErr != nil {
+			log.Printf("Could not read response payload: %v", bodyErr)
+		}
+		log.Printf("data: %v", string(data))
+	}
+	// get token
 	{
-		URL, urlErr := url.ParseRequestURI("http://whoami.localhost:8085/auth")
+		URL, urlErr := url.ParseRequestURI("http://whoami.localhost:8085/token")
 		if urlErr != nil {
 			log.Print(urlErr)
 			return
 		}
-		res, err, statusCode := auth.RequestAuthCode(
-			URL,
-			url.UserPassword("example", "secret"),
-			auth.Client{
-				Client_id:    "idunion.web",
-				Redirect_uri: "http://localhost:8080/", // TODO: redirect_uri should point to the destination URL of the app that wants to get accessed
-			},
-			"TODO",
-		)
+		log.Printf("AuthCode: %s", authCode)
+		query := url.Values{
+			"redirect_uri": []string{"http://localhost:8080/"},
+			"grant_type":   []string{"authorization_code"},
+			"code":         []string{authCode},
+			"client_id":    []string{"idunion.web"},
+		}
+		URL.RawQuery = query.Encode()
+		log.Printf("Token-URL: %s", URL.String())
+		req, reqErr := http.NewRequest("POST", URL.String(), nil)
+		if reqErr != nil {
+			log.Printf("ERROR: Could not construct token request: %v", reqErr)
+			return
+		}
+		client := &http.Client{}
+		res, err := client.Do(req)
 		if err != nil {
-			log.Printf("ERROR: Login response body: %v", err)
-			w.WriteHeader(statusCode)
-		} else {
-			log.Printf("StatusCode: %v", res.StatusCode)
-			for k, v := range res.Header {
-				log.Printf("%s: %s", k, v)
-			}
-			loc, locErr := res.Location()
-			if locErr != nil {
-				log.Printf("Error with response location: %v", locErr)
-				return
-			}
-			log.Printf("Location: %s", loc)
-			if authCodes, ok := loc.Query()["code"]; ok {
-				if len(authCodes) == 1 { // only one code query parameter accepted
-					authCode = authCodes[0]
-				} else {
-					log.Printf("ERROR: Not exactly 1 code parameter found")
-					return
-				}
-			} else {
-				log.Printf("Location %s contains no code query parameter", loc)
-				return
-			}
-			data, bodyErr := ioutil.ReadAll(res.Body)
-			if bodyErr != nil {
-				log.Printf("Could not read response payload: %v", bodyErr)
-			}
-			log.Printf("data: %v", string(data))
+			log.Printf("ERROR obtaining token: %v", err)
+			return
 		}
-		// get token
-		{
-			URL, urlErr := url.ParseRequestURI("http://whoami.localhost:8085/token")
-			if urlErr != nil {
-				log.Print(urlErr)
-				return
-			}
-			log.Printf("AuthCode: %s", authCode)
-			query := url.Values{
-				"redirect_uri": []string{"http://localhost:8080/"},
-				"grant_type":   []string{"authorization_code"},
-				"code":         []string{authCode},
-				"client_id":    []string{"idunion.web"},
-			}
-			URL.RawQuery = query.Encode()
-			log.Printf("Token-URL: %s", URL.String())
-			req, reqErr := http.NewRequest("POST", URL.String(), nil)
-			if reqErr != nil {
-				log.Printf("ERROR: Could not construct token request: %v", reqErr)
-				return
-			}
-			client := &http.Client{}
-			res, err := client.Do(req)
-			if err != nil {
-				log.Printf("ERROR obtaining token: %v", err)
-				return
-			}
-			data, bodyErr := ioutil.ReadAll(res.Body)
-			if bodyErr != nil {
-				log.Printf("ERROR: Could not resd token response: %v", bodyErr)
-				return
-			}
-			log.Printf("Token response: %s", string(data))
-			// TODO: Wrap token into cookie and send it back
+		data, bodyErr := ioutil.ReadAll(res.Body)
+		if bodyErr != nil {
+			log.Printf("ERROR: Could not resd token response: %v", bodyErr)
+			return
 		}
-
-		w.WriteHeader(res.StatusCode)
-		w.Write([]byte(fmt.Sprint(err)))
+		log.Printf("Token response: %s", string(data))
+		type Token struct {
+			AccessToken  string `json:"access_token"`
+			TokenType    string `json:"token_type"`
+			ExpiresIn    uint64 `json:"expires_in"`
+			RefreshToken string `json:"refresh_token,omitempty"`
+		}
+		var jToken Token
+		errJson := json.Unmarshal(data, &jToken)
+		if errJson != nil {
+			log.Printf("ERROR: JSON unmarshalling error: %v", errJson)
+			return
+		}
+		// Wrap token into cookie and send it back
+		session, errSession := api.store.Get(r, "t")
+		if errSession != nil {
+			log.Printf("WARNING: Get session error: %v", errSession)
+		}
+		session.Options.Secure = true
+		session.Options.HttpOnly = true // prevent Javascript access
+		session.Options.SameSite = http.SameSiteStrictMode
+		session.Options.MaxAge = 0 // 0: last until session end
+		// cookie values
+		session.Values["at"] = jToken.AccessToken
+		session.Values["rt"] = jToken.RefreshToken
+		session.Values["exp"] = jToken.ExpiresIn
+		if err := session.Save(r, w); err != nil {
+			log.Printf("ERROR: Could not save session: %v", err)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 }
@@ -238,10 +279,12 @@ func main() {
 	http.HandleFunc("/login", PageHandler)
 
 	log.Println("Starting server on :8080")
-	var iduImpl IduImpl
+	iduImpl := &IduImpl{
+		store: sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY"))),
+	}
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Mount("/", api.HandlerWithOptions(&iduImpl, chiServerOptions))
+	r.Mount("/", api.HandlerWithOptions(iduImpl, chiServerOptions))
 	http.Handle("/api/", r) // trailing "/" is a wildcard pattern for subsequent segments
 
 	if err := http.ListenAndServe(":8080", nil); err != nil {
