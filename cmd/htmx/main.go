@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/gorilla/sessions"
+	"gopkg.in/validator.v2"
 )
 
 type IduImpl struct {
@@ -45,6 +46,11 @@ var templateFiles = []string{
 var staticTemplateParams = map[string]string{
 	"MAIL_DOMAIN":               "idunion.me",
 	"USERNAME_VALIDATION_REGEX": "/^[a-z0-9._-]+$/",
+}
+
+type UserCredentials struct {
+	Username string `validate:"min=3,max=30,regexp=^[a-z0-9._-]+$`
+	Password string `validate:"min=6"`
 }
 
 // renders template files and replaces the static parameters
@@ -110,6 +116,18 @@ func (api *IduImpl) GetToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *IduImpl) Login(w http.ResponseWriter, r *http.Request) {
+	// read form values
+	UserCredentials := UserCredentials{
+		Username: r.FormValue("username"),
+		Password: r.FormValue("password"),
+	}
+	if err := validator.Validate(UserCredentials); err != nil {
+		// TODO: Do not print the password.
+		log.Printf("Validationerror: %s. Values: Username: %s Password: %s", err, UserCredentials.Username, UserCredentials.Password)
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("Credentials invalid"))
+		return
+	}
 	// check for cookie
 	for _, cookie := range r.Cookies() {
 		log.Printf("COOKIE: %s  VALUE: %s", cookie.Name, cookie.Value)
@@ -137,7 +155,7 @@ func (api *IduImpl) Login(w http.ResponseWriter, r *http.Request) {
 			Client:  &client,
 			Scope:   "TODO: scope",
 		},
-		url.UserPassword("example", os.Getenv("EXAMPLE_USER_PASSWORD")),
+		url.UserPassword(UserCredentials.Username, UserCredentials.Password),
 		"TODO: state",
 		"TODO: code_challenge",
 	)
@@ -181,7 +199,7 @@ func (api *IduImpl) Login(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ERROR: Could not save session: %v", err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	http.Redirect(w, r, "/about", http.StatusTemporaryRedirect)
 	return
 }
 

@@ -8,4 +8,5 @@ require (
 	github.com/go-chi/chi/v5 v5.2.1 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/sessions v1.4.0 // indirect
+	gopkg.in/validator.v2 v2.0.1 // indirect
 )

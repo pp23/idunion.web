@@ -21,19 +21,19 @@ paths:
       operationId: register
       description: Register a new user with idunion
       responses:
-        '200':
+        "200":
           description: Success
   /token:
     get:
       tags:
-       - user
+        - user
       security:
         - CookieAuth: []
       description: Authorize an authenticated user.
       responses:
-        '200':
+        "200":
           description: Success. Returns an OAuth token with authorization claims
-        '401':
+        "401":
           description: Not authorized. Authentication Cookie not valid.
   /login:
     post:
@@ -43,12 +43,15 @@ paths:
         - BasicAuth: []
       operationId: login
       description: Authenticate and login an existing user
+      requestBody:
+        description: Form input of user credentials
+        # TODO: oapi-codegen does not support reading data into go objects
       responses:
-        '200':
+        "200":
           description: >-
             Success. Authentication Token sent via "Set-Cookie" header.
             Needs to be used to authorize and get an OAuth token.
-        '400':
+        "400":
           description: Bad request. Credentials were incorrect.
 components:
   securitySchemes:
