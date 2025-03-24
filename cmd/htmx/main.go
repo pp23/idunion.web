@@ -22,9 +22,17 @@ import (
 	"gopkg.in/validator.v2"
 )
 
+// dynamic frontend parameters that depent on the current state of the frontend
+type DynamicTemplateParameters struct {
+	UserLoggedIn bool
+}
+
 type IduImpl struct {
 	store *sessions.CookieStore
+	state *DynamicTemplateParameters
 }
+
+const USER_STATE_CHANGE_EVT = "usc"
 
 var chiServerOptions = api.ChiServerOptions{
 	// the frontend forwards api/ requests to the api-handling service
@@ -42,17 +50,31 @@ var templateFiles = []string{
 	"templates/about.html", // Similarly for other pages
 	"templates/contact.html",
 	"templates/faq.html",
+	"templates/nav.html",        // TODO: Separate pages from components?
 	"templates/user/login.html", // template.ParseFiles takes only the basename
 }
 
 var staticTemplateParams = map[string]string{
 	"MAIL_DOMAIN":               "idunion.me",
 	"USERNAME_VALIDATION_REGEX": "/^[a-z0-9._-]+$/",
+	"USER_STATE_CHANGE_EVENT":   USER_STATE_CHANGE_EVT, // HX-Trigger event to show user events like login/logout
 }
 
 type UserCredentials struct {
 	Username string `validate:"min=3,max=30,regexp=^[a-z0-9._-]+$`
 	Password string `validate:"min=6"`
+}
+
+// creates a default dynamic parameters instance that represent the state of the frontend
+func NewFrontendState() *DynamicTemplateParameters {
+	return &DynamicTemplateParameters{
+		UserLoggedIn: false,
+	}
+}
+
+func setEventResponseHeader(w http.ResponseWriter, event string) http.ResponseWriter {
+	w.Header().Add("HX-Trigger", event)
+	return w
 }
 
 // renders template files and replaces the static parameters
@@ -92,8 +114,8 @@ func staticRenderTemplates(templateFiles []string, staticParams map[string]strin
 }
 
 // IndexHandler serves the home page
-func IndexHandler(w http.ResponseWriter, r *http.Request) {
-	err := templates.ExecuteTemplate(w, "index.html", nil)
+func (state *DynamicTemplateParameters) IndexHandler(w http.ResponseWriter, r *http.Request) {
+	err := templates.ExecuteTemplate(w, "index.html", state)
 	if err != nil {
 		http.Error(w, "Error rendering home page", http.StatusInternalServerError)
 		log.Printf("Error rendering home page: %v", err)
@@ -101,13 +123,13 @@ func IndexHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // PageHandler serves other static pages
-func PageHandler(w http.ResponseWriter, r *http.Request) {
+func (state *DynamicTemplateParameters) PageHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.URL.Path)
 	page := r.URL.Path[1:] // Remove leading '/'
 	if page == "" {
 		page = "home"
 	}
-	err := templates.ExecuteTemplate(w, page+".html", nil)
+	err := templates.ExecuteTemplate(w, page+".html", state)
 	if err != nil {
 		http.Error(w, "Error rendering page", http.StatusInternalServerError)
 		log.Printf("Error rendering page: %v", err)
@@ -206,7 +228,9 @@ func (api *IduImpl) Login(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ERROR: Could not save session: %v", err)
 		return
 	}
-	http.Redirect(w, r, "/about", http.StatusTemporaryRedirect)
+	api.state.UserLoggedIn = true // TODO: check when login gets called whether user is already logged in
+	setEventResponseHeader(w, USER_STATE_CHANGE_EVT)
+	w.WriteHeader(http.StatusOK)
 	return
 }
 
@@ -239,19 +263,23 @@ func main() {
 	staticDir := "./static"
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
-	http.HandleFunc("/", IndexHandler)
+	state := NewFrontendState()
+
+	http.HandleFunc("/", state.IndexHandler)
 
 	// Serve other pages
-	http.HandleFunc("/home", PageHandler)
-	http.HandleFunc("/about", PageHandler)
-	http.HandleFunc("/contact", PageHandler)
-	http.HandleFunc("/faq", PageHandler)
+	http.HandleFunc("/home", state.PageHandler)
+	http.HandleFunc("/about", state.PageHandler)
+	http.HandleFunc("/contact", state.PageHandler)
+	http.HandleFunc("/faq", state.PageHandler)
+	http.HandleFunc("/nav", state.PageHandler)
 	// Serve user related fragments
-	http.HandleFunc("/login", PageHandler)
+	http.HandleFunc("/login", state.PageHandler)
 
 	log.Println("Starting server on :8080")
 	iduImpl := &IduImpl{
 		store: sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY"))),
+		state: state,
 	}
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
