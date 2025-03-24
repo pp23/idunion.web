@@ -7,7 +7,7 @@
 >
   <div style="display: flex; align-items: center">
     <input type="text" name="username" placeholder="username" required />
-    <label style="margin-left: 8px; font-weight: bold">@{{.MAIL_DOMAIN}}</label>
+    <label style="margin-left: 8px; font-weight: bold">@[[MAIL_DOMAIN]]</label>
     <div
       class="error"
       id="username-error"
@@ -42,7 +42,7 @@
         isValid = false;
       }
 
-      let usernameRegex = {{.USERNAME_VALIDATION_REGEX}};
+      let usernameRegex = [[USERNAME_VALIDATION_REGEX]];
       if (!usernameRegex.test(username)) {
         document.getElementById("username-error").textContent =
           "Username must contain only lowercase letters and can contain numbers, dashes (-), underscores (_) and periods (.)";

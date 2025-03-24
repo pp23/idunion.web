@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"html/template"
 	"htmx/internal/auth/oauth2"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	api "htmx/internal/api"
 
@@ -67,8 +69,13 @@ func staticRenderTemplates(templateFiles []string, staticParams map[string]strin
 		}
 		defer renderedFile.Close() // backup. intentionally ignore error as we call close explicitly
 
-		if template, err := template.ParseFiles(f); err == nil {
-			if err := template.Execute(renderedFile, staticParams); err != nil {
+		if template, err := ioutil.ReadFile(f); err == nil {
+			content := string(template)
+			for param, value := range staticParams {
+				content = strings.ReplaceAll(content, "[["+param+"]]", value)
+			}
+			_, err := renderedFile.WriteString(content)
+			if err != nil {
 				renderedFile.Close()
 				return err
 			}
